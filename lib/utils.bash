@@ -44,10 +44,20 @@ list_all_versions() {
 
 get_download_url() {
 	local version="$1"
-	local arch="linux-x86_64"
+	local arch="linux-systemd-x86_64"
 
-	# Use the original downloads.mariadb.org URL format
-	echo "https://downloads.mariadb.org/f/mariadb-${version}/bintar-${arch}/mariadb-${version}-${arch}.tar.gz?serve"
+	# Parse dlm.mariadb.com to get actual download URL
+	local browse_url="https://dlm.mariadb.com/browse/mariadb_server/${version}/bintar-${arch}/"
+	local download_url
+
+	echo "* Fetching download URL from MariaDB download service..." >&2
+	download_url=$(curl -s "$browse_url" | grep -o "href=\"[^\"]*mariadb-${version}-${arch}\.tar\.gz[^\"]*\"" | head -1 | sed 's/href="//;s/"//')
+
+	if [ -z "$download_url" ]; then
+		fail "Could not find download URL for version $version"
+	fi
+
+	echo "$download_url"
 }
 
 download_release() {
@@ -58,7 +68,12 @@ download_release() {
 	url=$(get_download_url "$version")
 
 	echo "* Downloading $TOOL_NAME release $version..."
-	curl "${curl_opts[@]}" -o "$filename" -C - "$url" || fail "Could not download $url"
+	curl "${curl_opts[@]}" -L -o "$filename" "$url" || fail "Could not download $url"
+
+	# Check if we got HTML instead of a tar.gz file
+	if file "$filename" | grep -q "HTML"; then
+		fail "Downloaded file is HTML, not a tar.gz archive. Check if version $version exists."
+	fi
 }
 
 install_version() {
@@ -73,15 +88,22 @@ install_version() {
 	(
 		# Extract the downloaded archive
 		echo "* Extracting $TOOL_NAME $version..."
-		local archive_name="mariadb-${version}-linux-x86_64"
-		tar -xzf "$ASDF_DOWNLOAD_PATH/${TOOL_NAME}-${version}.tar.gz" -C "$ASDF_DOWNLOAD_PATH" || fail "Could not extract archive"
+		local archive_file="$ASDF_DOWNLOAD_PATH/${TOOL_NAME}-${version}.tar.gz"
+
+		tar -xzf "$archive_file" -C "$ASDF_DOWNLOAD_PATH" || fail "Could not extract archive"
 
 		# Move contents to install path
 		mkdir -p "$install_path"
-		if [ -d "$ASDF_DOWNLOAD_PATH/$archive_name" ]; then
-			cp -r "$ASDF_DOWNLOAD_PATH/$archive_name"/* "$install_path/"
+
+		# Find the extracted directory (could be mariadb-version-linux-systemd-x86_64)
+		local extracted_dir
+		extracted_dir=$(find "$ASDF_DOWNLOAD_PATH" -maxdepth 1 -type d -name "mariadb-${version}*" | head -1)
+
+		if [ -n "$extracted_dir" ] && [ -d "$extracted_dir" ]; then
+			cp -r "$extracted_dir"/* "$install_path/"
 		else
-			cp -r "$ASDF_DOWNLOAD_PATH"/* "$install_path/"
+			# Fallback: copy all files except the archive
+			find "$ASDF_DOWNLOAD_PATH" -type f ! -name "*.tar.gz" -exec cp {} "$install_path/" \;
 		fi
 
 		# Create necessary directories
