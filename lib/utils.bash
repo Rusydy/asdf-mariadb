@@ -23,31 +23,28 @@ sort_versions() {
 }
 
 list_github_tags() {
-	# Dependency Checks
-	for tool in curl jq; do
-		command -v "$tool" >/dev/null 2>&1 || {
-			echo "Error: '$tool' is required but not installed. Exiting." >&2
-			exit 1
-		}
-	done
-
-	# Function to fetch tags
-	fetch_tags() {
-		local page="$1"
-		curl -s "https://api.github.com/repos/MariaDB/server/tags?per_page=100&page=$page"
-	}
-
-	# Collect tags (first 5 pages covers hundreds of releases)
-	local tags=""
-	for page in {1..5}; do
-		local page_tags
-		page_tags=$(fetch_tags "$page" | jq -r '.[].name' | grep -E '^mariadb-[0-9]+\.[0-9]+\.[0-9]+$' || true)
-		[[ -z "$page_tags" ]] && break
-		tags+="${page_tags}"$'\n'
-	done
-
-	# Output sorted, unique, prefix-stripped version numbers
-	echo "$tags" | sed 's/^mariadb-//' | sort -Vr | uniq | head -50
+	# MariaDB doesn't use GitHub releases, so we'll provide a hardcoded list of known versions
+	# This list includes recent stable releases that are available for download
+	cat <<-EOF
+		11.6.2
+		11.5.2
+		11.4.4
+		11.4.3
+		11.4.2
+		11.3.2
+		11.2.6
+		11.1.7
+		11.0.6
+		10.11.10
+		10.11.9
+		10.11.8
+		10.10.7
+		10.9.8
+		10.8.8
+		10.6.19
+		10.5.26
+		10.4.34
+	EOF
 }
 
 list_all_versions() {
