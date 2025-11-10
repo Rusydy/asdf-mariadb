@@ -1,11 +1,22 @@
 #!/usr/bin/env bash
+# Lists all available MariaDB releases by querying all tag pages for mariadb-* tags.
 
-set -euo pipefail
+# Dependency check
+for tool in curl jq; do
+  if ! command -v "$tool" >/dev/null 2>&1; then
+    echo "Error: '$tool' is required but not installed. Exiting." >&2
+    exit 1
+  fi
+done
 
-current_script_path=${BASH_SOURCE[0]}
-plugin_dir=$(dirname "$(dirname "$current_script_path")")
+# Loop over 5 pages of tags (adjust the range for more results)
+tags=""
+for page in {1..5}; do
+  results=$(curl -s "https://api.github.com/repos/MariaDB/server/tags?per_page=100&page=$page" | jq -r '.[].name')
+  page_tags=$(echo "$results" | grep -E '^mariadb-[0-9]+\.[0-9]+\.[0-9]+$')
+  [[ -z "$page_tags" ]] && continue
+  tags+="${page_tags}"$'\n'
+done
 
-# shellcheck source=../lib/utils.bash
-source "${plugin_dir}/lib/utils.bash"
-
-list_all_versions | xargs echo
+# Output only version numbers, sorted, newest first
+echo "$tags" | sed 's/^mariadb-//' | sort -Vr | uniq
