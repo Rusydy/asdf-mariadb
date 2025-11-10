@@ -23,28 +23,19 @@ sort_versions() {
 }
 
 list_github_tags() {
-	# MariaDB doesn't use GitHub releases, so we'll provide a hardcoded list of known versions
-	# This list includes recent stable releases that are available for download
-	cat <<-EOF
-		11.6.2
-		11.5.2
-		11.4.4
-		11.4.3
-		11.4.2
-		11.3.2
-		11.2.6
-		11.1.7
-		11.0.6
-		10.11.10
-		10.11.9
-		10.11.8
-		10.10.7
-		10.9.8
-		10.8.8
-		10.6.19
-		10.5.26
-		10.4.34
-	EOF
+	# Dependency Checks
+	for tool in curl jq; do
+		command -v "$tool" >/dev/null 2>&1 || {
+			echo "Error: '$tool' is required but not installed. Exiting." >&2
+			exit 1
+		}
+	done
+
+	# Use GitHub releases API which has the actual MariaDB release tags
+	curl -s "https://api.github.com/repos/MariaDB/server/releases" |
+		jq -r '.[].tag_name' |
+		sed 's/^mariadb-//' |
+		sort -Vr
 }
 
 list_all_versions() {
@@ -55,12 +46,8 @@ get_download_url() {
 	local version="$1"
 	local arch="linux-x86_64"
 
-	# Check if it's a dev version
-	if echo "$version" | grep -q "dev"; then
-		echo "https://downloads.mariadb.org/f/mariadb-${version}/bintar-${arch}/mariadb-${version}-${arch}.tar.gz?serve"
-	else
-		echo "https://downloads.mariadb.org/f/mariadb-${version}/bintar-${arch}/mariadb-${version}-${arch}.tar.gz?serve"
-	fi
+	# Use the original downloads.mariadb.org URL format
+	echo "https://downloads.mariadb.org/f/mariadb-${version}/bintar-${arch}/mariadb-${version}-${arch}.tar.gz?serve"
 }
 
 download_release() {
